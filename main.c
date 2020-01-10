@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V0.1                                               
+ * Program: SIDESPLITTER V1.0                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -97,6 +97,10 @@ int main(int argc, char **argv){
   add_map(vol1, ro1, nthread);
   add_map(vol2, ro2, nthread);
 
+  // Apply masks in situ
+  apply_mask(mask, ro1, nthread);
+  apply_mask(mask, ro2, nthread);
+  
   // Execute forward transform
   fftw_execute(fft_ro1_ki1);
   fftw_execute(fft_ro2_ki2);
@@ -104,8 +108,19 @@ int main(int argc, char **argv){
   // Obtain spectra
   double *spec1 = calloc(xyz, sizeof(double));
   double *spec2 = calloc(xyz, sizeof(double));
-
   double maxres = get_spectrum(ki1, ki2, spec1, spec2, xyz, nthread);
+
+  // Zero fill maps
+  memset(ro1, 0, r_st);
+  memset(ro2, 0, r_st);
+
+  // Copy data into place
+  add_map(vol1, ro1, nthread);
+  add_map(vol2, ro2, nthread);
+
+  // Execute forward transform
+  fftw_execute(fft_ro1_ki1);
+  fftw_execute(fft_ro2_ki2);
 
   // Zero centre
   ki1[0] = 0.0 + 0.0I;
@@ -155,28 +170,11 @@ int main(int argc, char **argv){
     fftw_execute(fft_ko2_ri2);
 
     mean_p = suppress_noise(ri1, ri2, ro1, ro2, mask, tail, xyz, nthread);
-
-    j = 1;
-
-    step_p = (double) ((int32_t) (tail->res * xyz * 2.0) - (int32_t) ((tail->res + tail->stp) * xyz * 2.0));
-
-    if (step_p < 0){
-      step_p = (prev_p - mean_p) / step_p;
-    } else {
-      step_p = (prev_p - mean_p) * -1.0;
-    }
-
-    while ((tail->res + tail->stp) * 2.0 * xyz > i){
-      spec1[i] *= prev_p + step_p * j;
-      spec2[i] *= prev_p + step_p * j;
-      j++;
-      i++;
-    }
-
+    
     printf("\t Resolution = %12.6f | MeanProb = %12.6f | FSC = %12.6f \n", apix / (tail->res + tail->stp), mean_p, tail->fsc);
     fflush(stdout);
 
-    if (mean_p < 0.5){
+    if (mean_p < 0.1){
       maxres = tail->res + tail->stp;
       break;
     }
@@ -229,6 +227,10 @@ int main(int argc, char **argv){
 
   } while (1);
 
+  // Apply masks in situ
+  apply_mask(mask, ro1, nthread);
+  apply_mask(mask, ro2, nthread);
+  
   // Forward transform
   fftw_execute(fft_ro1_ki1);
   fftw_execute(fft_ro2_ki2);

@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V0.1                                               
+ * Program: SIDESPLITTER V1.0                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -225,8 +225,9 @@ double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
   int32_t size = (full / 2) + 1, i, j;
   int32_t full_size = full * size;
   int32_t *n = calloc(full, sizeof(int32_t));
-  double *sum = calloc(full, sizeof(double));
-  double *sub = calloc(full, sizeof(double));
+  long double *nom = calloc(full, sizeof(long double));
+  long double *dn1 = calloc(full, sizeof(long double));
+  long double *dn2 = calloc(full, sizeof(long double));
   pthread_t threads[nthreads];
   spec_arg arg[nthreads];
   // Start threads
@@ -236,8 +237,9 @@ double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
     arg[i].out1 = calloc(full, sizeof(double));
     arg[i].out2 = calloc(full, sizeof(double));
     arg[i].n = calloc(full, sizeof(int32_t));
-    arg[i].sum = calloc(full, sizeof(double));
-    arg[i].sub = calloc(full, sizeof(double));
+    arg[i].nom = calloc(full, sizeof(long double));
+    arg[i].dn1 = calloc(full, sizeof(long double));
+    arg[i].dn2 = calloc(full, sizeof(long double));
     arg[i].dim = dim;
     arg[i].full_size = full_size;
     arg[i].full = full;
@@ -261,19 +263,24 @@ double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
       n[j] += arg[i].n[j];
       spec1[j] += arg[i].out1[j];
       spec2[j] += arg[i].out2[j];
-      sum[j] += arg[i].sum[j];
-      sub[j] += arg[i].sub[j];
+      nom[j] += arg[i].nom[j];
+      dn1[j] += arg[i].dn1[j];
+      dn2[j] += arg[i].dn2[j];
     }
     free(arg[i].n);
     free(arg[i].out1);
     free(arg[i].out2);
-    free(arg[i].sum);
-    free(arg[i].sub);
+    free(arg[i].nom);
+    free(arg[i].dn1);
+    free(arg[i].dn2);
   }
   for (i = 0; i < full; i++){
+    if (n[i] == 0){
+      continue;
+    }
     spec1[i] = (spec1[i] / (double) n[i]);
     spec2[i] = (spec2[i] / (double) n[i]);
-    if ((cut > 0.0) || (spec1[i] > 0.0 && spec2[i] > 0.0 && spec1[i] < 0.1 && spec2[i] < 0.1) || (log2(sum[i] / sub[i]) < 0.25)){
+    if ((cut > 0.0) || (fabsl(nom[i]) / sqrtl(fabsl(dn1[i]) * fabsl(dn2[i])) < 0.143)){
       if (cut == 0.0){
 	cut = ((double) i) / (full * 2.0);
       }
@@ -283,10 +290,10 @@ double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
     }
   }
   free(n);
-  if (cut > 0.0){
-    return cut;
+  if (cut == 0.0){
+    cut = 0.5;
   }
-  return 0.45;
+  return cut;
 }
 
 void get_spec_thread(spec_arg *arg){
@@ -305,9 +312,10 @@ void get_spec_thread(spec_arg *arg){
         index = _k * arg->full_size + _j * arg->size + _i;
         arg->out1[norms] += sqrt(fabs(creal(arg->in1[index] * conj(arg->in1[index]))));
 	arg->out2[norms] += sqrt(fabs(creal(arg->in2[index] * conj(arg->in2[index]))));
-	if (arg->sum && arg->sub){
-	  arg->sum[norms] += creal((arg->in1[index] + arg->in2[index]) * conj(arg->in1[index] + arg->in2[index]));
-	  arg->sub[norms] += creal((arg->in1[index] - arg->in2[index]) * conj(arg->in1[index] - arg->in2[index]));
+	if (arg->nom && arg->dn1 && arg->dn2){
+	  arg->nom[norms] += creal((arg->in1[index]) * conj(arg->in2[index]));
+	  arg->dn1[norms] += creal((arg->in1[index]) * conj(arg->in1[index]));
+	  arg->dn2[norms] += creal((arg->in2[index]) * conj(arg->in2[index]));
 	}
 	arg->n[norms]++;
       }
@@ -333,8 +341,9 @@ void apply_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
     arg[i].out1 = calloc(full, sizeof(double));
     arg[i].out2 = calloc(full, sizeof(double));
     arg[i].n = calloc(full, sizeof(int32_t));
-    arg[i].sum = NULL;
-    arg[i].sub = NULL;
+    arg[i].nom = NULL;
+    arg[i].dn1 = NULL;
+    arg[i].dn2 = NULL;
     arg[i].dim = dim;
     arg[i].full_size = full_size;
     arg[i].full = full;

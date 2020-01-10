@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V0.1                                               
+ * Program: SIDESPLITTER V1.0                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -41,6 +41,7 @@ typedef struct{
   int32_t   size;
   int32_t   step;
   int32_t thread;
+  long double sigma;
 } max_arg;
 
 // Probabilistic correction thread arguments structure

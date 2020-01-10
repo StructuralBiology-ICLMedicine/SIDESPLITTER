@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V0.1                                               
+ * Program: SIDESPLITTER V1.0                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -35,6 +35,7 @@ double truncate_map(double *in1, double *in2, double *out1, double *out2, r_mrc 
     arg1[i].in1 = in1;
     arg1[i].in2 = in2;
     arg1[i].noise = 0.0;
+    arg1[i].sigma = 0.0;
     arg1[i].count = 0.0;
     arg1[i].size = full;
     arg1[i].step = nthreads;
@@ -47,6 +48,7 @@ double truncate_map(double *in1, double *in2, double *out1, double *out2, r_mrc 
   }
   double count = 0.0;
   double noise = 0.0;
+  long double sigma = 0.0;
   // Join threads
   for (i = 0; i < nthreads; i++){
     if (pthread_join(threads[i], NULL)){
@@ -55,9 +57,17 @@ double truncate_map(double *in1, double *in2, double *out1, double *out2, r_mrc 
       exit(1);
     }
     count += arg1[i].count;
+    sigma += arg1[i].sigma;
     if (noise < arg1[i].noise){
       noise = arg1[i].noise;
     }
+  }
+  // Take normal estimate of maximum if higher
+  sigma = sqrtl(sigma / (long double) count);
+  sigma = sigma * sqrtl(2.0) * sqrtl(logl((long double) count));
+  sigma = sigma * sigma;
+  if (noise < (double) sigma){
+    noise = (double) sigma;
   }
   // Pass through signal greater than noise
   ass_vox_arg arg2[nthreads];
@@ -108,6 +118,7 @@ void calc_max_noise_thread(max_arg *arg){
     if (cor > arg->noise){
       arg->noise = cor;
     }
+    arg->sigma += (long double) cor;
   }
   return;
 }

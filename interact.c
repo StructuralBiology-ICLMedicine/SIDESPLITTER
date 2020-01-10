@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V0.1                                               
+ * Program: SIDESPLITTER V1.0                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -148,7 +148,7 @@ arguments *parse_args(int argc, char **argv){
 
   printf("    PLEASE NOTE: SIDESPLITTER requires the unfiltered halfmaps and mask from each iteration or your results will be invalid\n");
   printf("                 Junk in = Junk out is one thing we will guarantee. Report any bugs to c.aylett@imperial.ac.uk - good luck!\n\n");
-  printf("    SIDESPLITTER v0.1: LAFTER algorithm for halfmaps - 14-08-2019 GNU Public Licensed - K Ramlaul, CM Palmer and CHS Aylett\n\n");
+  printf("    SIDESPLITTER V1.0: LAFTER algorithm for halfmaps - 01-01-2020 GNU Public Licensed - K Ramlaul, CM Palmer and CHS Aylett\n\n");
 
   // Capture user requested settings
   int i;

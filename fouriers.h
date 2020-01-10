@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V0.1                                               
+ * Program: SIDESPLITTER V1.0                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -72,8 +72,9 @@ typedef struct{
   fftw_complex *in2;
   double      *out1;
   double      *out2;
-  double       *sum;
-  double       *sub;
+  long double  *nom;
+  long double  *dn1;
+  long double  *dn2;
   int32_t        *n;
   double        dim;
   int32_t full_size;
