@@ -72,7 +72,9 @@ double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mr
     arg2[i].in2 = in2;
     arg2[i].out1 = out1;
     arg2[i].out2 = out2;
-    arg2[i].res_stp_sd = node->stp / rmsd;
+    arg2[i].rstp = node->stp;
+    arg2[i].rmsd = rmsd;
+    arg2[i].flag = 1.0;
     arg2[i].size = max;
     arg2[i].step = nthreads;
     arg2[i].thread = i;
@@ -82,6 +84,8 @@ double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mr
       exit(1);
     }
   }
+  node->max = psnr;
+  double flag = 1.0;
   // Join threads
   for (i = 0; i < nthreads; i++){
     if (pthread_join(threads[i], NULL)){
@@ -89,9 +93,13 @@ double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mr
       fflush(stdout);
       exit(1);
     }
+    flag *= arg2[i].flag;
   }
-  node->max = psnr;
-  return psnr;
+  if (flag > 0.0){
+    return -psnr;
+  } else {
+    return psnr;
+  }
 }
 
 void calc_noise_signal_thread(cns_arg *arg){
@@ -116,9 +124,13 @@ void calc_noise_signal_thread(cns_arg *arg){
 
 void probability_correct_thread(prob_arg *arg){
   int32_t i;
+  double res_stp_sd = arg->rstp / arg->rmsd;
   for (i = arg->thread; i < arg->size; i += arg->step){
-    arg->out1[i] += arg->in1[i] * arg->res_stp_sd;
-    arg->out2[i] += arg->in2[i] * arg->res_stp_sd;
+    if (arg->in1[i] / arg->rmsd > 5 || arg->in2[i] / arg->rmsd > 5){
+      arg->flag = 0.0;
+    }
+    arg->out1[i] += arg->in1[i] * res_stp_sd;
+    arg->out2[i] += arg->in2[i] * res_stp_sd;
   }
   return;
 }

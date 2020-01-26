@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Wrapper to run relion_external_reconstruct and sidesplitter
-# Version 1.0
+#
 # Author: Colin M. Palmer
 
 # Usage:

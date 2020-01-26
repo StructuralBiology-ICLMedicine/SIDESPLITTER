@@ -110,6 +110,9 @@ int main(int argc, char **argv){
   double *spec2 = calloc(xyz, sizeof(double));
   double maxres = get_spectrum(ki1, ki2, spec1, spec2, xyz, nthread);
 
+  // Report FSC cut-off
+  printf("\n\t FSC = 0.143 within mask = %12.6f \n", apix / maxres);
+
   // Zero fill maps
   memset(ro1, 0, r_st);
   memset(ro2, 0, r_st);
@@ -171,17 +174,15 @@ int main(int argc, char **argv){
 
     mean_p = suppress_noise(ri1, ri2, ro1, ro2, mask, tail, xyz, nthread);
     
-    printf("\t Resolution = %12.6f | MeanProb = %12.6f | FSC = %12.6f \n", apix / (tail->res + tail->stp), mean_p, tail->fsc);
-    fflush(stdout);
-
-    if (mean_p < 0.1){
+    if (tail->res + tail->stp > 0.475 || (mean_p < 0.0 && tail->res + tail->stp > maxres)){
       maxres = tail->res + tail->stp;
       break;
+    } else if (mean_p < 0.0){
+      mean_p *= -1.0;
     }
-
-    if (tail->res + tail->stp > maxres){
-      break;
-    }
+    
+    printf("\t Resolution = %12.6f | MeanProb = %12.6f | FSC = %12.6f \n", apix / (tail->res + tail->stp), mean_p, tail->fsc);
+    fflush(stdout);
 
     tail = extend_list(tail, mean_p);
     

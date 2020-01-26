@@ -51,7 +51,9 @@ typedef struct{
   double       *in2;
   double      *out1;
   double      *out2;
-  double res_stp_sd;
+  double       rstp;
+  double       rmsd;
+  double       flag;
   int32_t      size;
   int32_t      step;
   int32_t    thread;

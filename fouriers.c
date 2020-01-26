@@ -284,8 +284,8 @@ double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
       if (cut == 0.0){
 	cut = ((double) i) / (full * 2.0);
       }
-      spec1[i] = 0.0;
-      spec2[i] = 0.0;
+      //spec1[i] = 0.0;
+      //spec2[i] = 0.0;
       continue;
     }
   }
