@@ -280,18 +280,13 @@ double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
     }
     spec1[i] = (spec1[i] / (double) n[i]);
     spec2[i] = (spec2[i] / (double) n[i]);
-    if ((cut > 0.0) || (fabsl(nom[i]) / sqrtl(fabsl(dn1[i]) * fabsl(dn2[i])) < 0.143)){
-      if (cut == 0.0){
-	cut = ((double) i) / (full * 2.0);
-      }
-      //spec1[i] = 0.0;
-      //spec2[i] = 0.0;
-      continue;
+    if ((cut == 0.0) && (fabsl(nom[i]) / sqrtl(fabsl(dn1[i]) * fabsl(dn2[i])) < 0.143)){
+      cut = ((double) i) / (full * 2.0);
     }
   }
   free(n);
   if (cut == 0.0){
-    cut = 0.5;
+    cut = 0.475;
   }
   return cut;
 }
