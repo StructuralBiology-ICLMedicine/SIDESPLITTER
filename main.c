@@ -106,12 +106,12 @@ int main(int argc, char **argv){
   fftw_execute(fft_ro2_ki2);
 
   // Obtain spectra
-  double *spec1 = calloc(xyz, sizeof(double));
-  double *spec2 = calloc(xyz, sizeof(double));
+  long double *spec1 = calloc(xyz, sizeof(long double));
+  long double *spec2 = calloc(xyz, sizeof(long double));
   double maxres = get_spectrum(ki1, ki2, spec1, spec2, xyz, nthread);
 
   // Report FSC cut-off
-  printf("\n\t FSC = 0.143 within mask = %12.6f \n", apix / maxres);
+  printf("\n\t FSC cut-off within mask = %12.6f \n", apix / maxres);
 
   // Zero fill maps
   memset(ro1, 0, r_st);
@@ -124,10 +124,6 @@ int main(int argc, char **argv){
   // Execute forward transform
   fftw_execute(fft_ro1_ki1);
   fftw_execute(fft_ro2_ki2);
-
-  // Zero centre
-  ki1[0] = 0.0 + 0.0I;
-  ki2[0] = 0.0 + 0.0I;
 
   // Zero fill maps
   memset(ro1, 0, r_st);
@@ -144,13 +140,10 @@ int main(int argc, char **argv){
 
   list *tail = &head;
 
-  // Loop parameterisation
-  double prev_p = 1.00;
-  double mean_p = 1.00;
-  double step_p = 0.00;
+  double mean_p;
 
   // Noise suppression loop
-  printf("\n\t Suppressing noise -- Pass 1 \n");
+  printf("\n\t Normalising -- Pass 1 \n");
   printf("\n\t # Resolution is reported in Ångströms [Å] everywhere it is quoted ");
   printf("\n\t # MeanProb records the estimated probability voxels are not noise ");
   printf("\n\t # FSC indicates the Fourier Shell Correlation between half sets -\n\n");
@@ -172,31 +165,23 @@ int main(int argc, char **argv){
     fftw_execute(fft_ko1_ri1);
     fftw_execute(fft_ko2_ri2);
 
-    mean_p = suppress_noise(ri1, ri2, ro1, ro2, mask, tail, xyz, nthread);
+    mean_p = normalise(ri1, ri2, ro1, ro2, mask, tail, xyz, nthread);
     
-    if (tail->res + tail->stp > 0.475 || (mean_p < 0.0 && tail->res + tail->stp > maxres)){
+    if (tail->res + tail->stp >= maxres || mean_p <= 0.05){
       maxres = tail->res + tail->stp;
       break;
-    } else if (mean_p < 0.0){
-      mean_p *= -1.0;
     }
-    
-    printf("\t Resolution = %12.6f | MeanProb = %12.6f | FSC = %12.6f \n", apix / (tail->res + tail->stp), mean_p, tail->fsc);
+          
+    printf("\t Resolution = %12.6Lf | MeanProb = %12.6f | FSC = %12.6f \n", apix / (tail->res + tail->stp), mean_p, tail->fsc);
     fflush(stdout);
 
     tail = extend_list(tail, mean_p);
-    
-    prev_p = mean_p;
 
   } while (1);
 
   // Back-transform noise-suppressed maps
   fftw_execute(fft_ro1_ki1);
   fftw_execute(fft_ro2_ki2);
-
-  // Zero centre
-  ki1[0] = 0.0 + 0.0I;
-  ki2[0] = 0.0 + 0.0I;
 
   // Zero fill maps
   memset(ro1, 0, r_st);
@@ -217,7 +202,7 @@ int main(int argc, char **argv){
 
     mean_p = truncate_map(ri1, ri2, ro1, ro2, mask, tail, args, xyz, nthread);
 
-    printf("\t Resolution = %12.6f | Recovery = %12.6f\n", apix / (tail->res + tail->stp), mean_p);
+    printf("\t Resolution = %12.6Lf | Recovery = %12.6f\n", apix / (tail->res + tail->stp), mean_p);
     fflush(stdout);
 
     if (tail->prv == NULL){
@@ -228,31 +213,78 @@ int main(int argc, char **argv){
 
   } while (1);
 
-  // Apply masks in situ
-  apply_mask(mask, ro1, nthread);
-  apply_mask(mask, ro2, nthread);
-  
-  // Forward transform
+  // Back-transform noise-suppressed maps
   fftw_execute(fft_ro1_ki1);
   fftw_execute(fft_ro2_ki2);
 
-  apply_spectrum(ki1, ki2, spec1, spec2, maxres, xyz, nthread);
+  // Zero fill maps
+  memset(ro1, 0, r_st);
+  memset(ro2, 0, r_st);
+
+  // Noise suppression loop 2
+  printf("\n\t Reapplying spectum \n");
+  printf("\n\t # Spectrum indicates the spectral power reapplied at the current resolution\n\n");
+  fflush(stdout);
+
+  i = 0;
+  do {
+    if (tail->res == 0.0){
+      lowpass_filter(ki1, ko1, tail, xyz, nthread);
+      lowpass_filter(ki2, ko2, tail, xyz, nthread);
+    } else {
+      bandpass_filter(ki1, ko1, tail, xyz, nthread);
+      bandpass_filter(ki2, ko2, tail, xyz, nthread);
+    }
+
+    fftw_execute(fft_ko1_ri1);
+    fftw_execute(fft_ko2_ri2);
+
+    reverse_norm(ri1, ri2, ro1, ro2, mask, tail, xyz, nthread);
+
+    printf("\t Resolution = %12.6Lf | Spectrum = %12.6Lf \n", apix / (tail->res + tail->stp), tail->pwr);
+    fflush(stdout);
+
+    if (tail->nxt == NULL){
+      break;
+    } else{
+      tail = tail->nxt;
+    }
+    
+  } while (1);
+
+  // Apply masks in situ
+  apply_mask(mask, ro1, nthread);
+  apply_mask(mask, ro2, nthread);
 
   // Output final volume
   printf("\n\t Writing noise truncated MRC files\n");
   fflush(stdout);
-
+  
   char *name1 = "halfmap1.mrc";
   char *name2 = "halfmap2.mrc";
 
-  fftw_plan fft_ki1_ri1 = fftw_plan_dft_c2r_3d(xyz, xyz, xyz, ki1, ri1, FFTW_ESTIMATE);
-  fftw_plan fft_ki2_ri2 = fftw_plan_dft_c2r_3d(xyz, xyz, xyz, ki2, ri2, FFTW_ESTIMATE);
+  if (!args->spec){
 
-  fftw_execute(fft_ki1_ri1);
-  fftw_execute(fft_ki2_ri2);
+    fftw_execute(fft_ro1_ki1);
+    fftw_execute(fft_ro2_ki2);
 
-  write_mrc(vol1, ri1, name1, xyz);
-  write_mrc(vol2, ri2, name2, xyz);
+    apply_spectrum(ki1, ki2, spec1, spec2, maxres, xyz, nthread);
+
+    fftw_plan fft_ki1_ri1 = fftw_plan_dft_c2r_3d(xyz, xyz, xyz, ki1, ri1, FFTW_ESTIMATE);
+    fftw_plan fft_ki2_ri2 = fftw_plan_dft_c2r_3d(xyz, xyz, xyz, ki2, ri2, FFTW_ESTIMATE);
+
+    fftw_execute(fft_ki1_ri1);
+    fftw_execute(fft_ki2_ri2);
+    
+    write_mrc(vol1, ri1, name1, xyz);
+    write_mrc(vol2, ri2, name2, xyz);
+
+  } else {
+
+    write_mrc(vol1, ro1, name1, xyz);
+    write_mrc(vol2, ro2, name2, xyz);
+
+  }
 
   // Over and out...
   printf("\n\n\n\t ++++ ++++ That's All Folks! ++++ ++++ \n\n\n");

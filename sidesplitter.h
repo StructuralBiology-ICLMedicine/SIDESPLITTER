@@ -42,23 +42,20 @@ typedef struct {
   char   *vol1;
   char   *vol2;
   char   *mask;
-  double sharp;
-  double ovfit;
-  double   rad;
-  double   cut;
-  int32_t  ups;
+  int8_t  spec;
 } arguments;
 
 // List node
 typedef struct list list;
 struct list {
-  double res;
-  double stp;
-  double crf;
-  double fsc;
-  double max;
-  list  *prv;
-  list  *nxt;
+  long double res;
+  long double stp;
+  long double pwr;
+  double      crf;
+  double      fsc;
+  double      max;
+  list       *prv;
+  list       *nxt;
 };
 
 // MRC files
@@ -117,10 +114,10 @@ void add_map(r_mrc *in, double *out, int32_t nthread);
 void add_fft(fftw_complex *in, fftw_complex *out, int32_t size, int32_t nthread);
 // Add FFT in to out
 
-double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, double *spec2, int32_t full, int32_t nthreads);
+double get_spectrum(fftw_complex *half1, fftw_complex *half2, long double *spec1, long double *spec2, int32_t full, int32_t nthreads);
 // Get spectra for halves
 
-void apply_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, double *spec2, double cutoff, int32_t full, int32_t nthreads);
+void apply_spectrum(fftw_complex *half1, fftw_complex *half2, long double *spec1, long double *spec2, double cutoff, int32_t full, int32_t nthreads);
 // Reapply spectra to halves
 
 void apply_mask(r_mrc *in, double *out, int32_t nthread);
@@ -138,9 +135,12 @@ double calc_fsc(fftw_complex *half1, fftw_complex *half2, int32_t size, int32_t 
 // Calculate FSC over map
 // Returns FSC
 
-double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mrc *mask, list *node, int32_t size, int32_t nthread);
+double normalise(double *in1, double *in2, double *out1, double *out2, r_mrc *mask, list *node, int32_t size, int32_t nthread);
 // Suppress noise between in/out
 // Returns mean p-val in mask
+
+void reverse_norm(double *in1, double *in2, double *out1, double *out2, r_mrc *mask, list *node, int32_t size, int32_t nthread);
+// Revert normalised data
 
 double truncate_map(double *in1, double *in2, double *out1, double *out2, r_mrc *mask, list *node, arguments *args, int32_t size, int32_t nthread);
 // Updates out if in1/2 over noise

@@ -51,9 +51,8 @@ typedef struct{
   double       *in2;
   double      *out1;
   double      *out2;
-  double       rstp;
-  double       rmsd;
-  double       flag;
+  long double  rstp;
+  long double  rmsd;
   int32_t      size;
   int32_t      step;
   int32_t    thread;
@@ -65,4 +64,8 @@ void calc_noise_signal_thread(cns_arg *arg);
 
 void probability_correct_thread(prob_arg *arg);
 // Correct according to probability
+// pthread function
+
+void revert_thread(prob_arg *arg);
+// Revert to original power
 // pthread function

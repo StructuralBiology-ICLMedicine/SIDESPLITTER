@@ -1,4 +1,5 @@
 
+
 /*                                                                         
  * Copyright 14/08/2019 - Dr. Christopher H. S. Aylett                     
  *                                                                         
@@ -64,7 +65,7 @@ double truncate_map(double *in1, double *in2, double *out1, double *out2, r_mrc 
   }
   // Take normal estimate of maximum if higher
   sigma = sqrtl(sigma / (long double) count);
-  sigma = sigma * sqrtl(2.0) * sqrtl(logl((long double) 2 * count));
+  sigma = sigma * sqrtl(2.0) * sqrtl(logl((long double) count));
   sigma = sigma * sigma;
   if (noise < (double) sigma){
     noise = (double) sigma;

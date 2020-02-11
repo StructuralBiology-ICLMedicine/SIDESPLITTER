@@ -219,8 +219,8 @@ void lowpass_filter_thread(filter_arg *arg){
 }
 
 // Calculate spectrum over map
-double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, double *spec2, int32_t full, int32_t nthreads){
-  double cut = 0.0;
+double get_spectrum(fftw_complex *half1, fftw_complex *half2, long double *spec1, long double *spec2, int32_t full, int32_t nthreads){
+  double fsc, crf, cut = 0.0;
   double dim = (double) full;
   int32_t size = (full / 2) + 1, i, j;
   int32_t full_size = full * size;
@@ -234,8 +234,8 @@ double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
   for (i = 0; i < nthreads; i++){
     arg[i].in1 = half1;
     arg[i].in2 = half2;
-    arg[i].out1 = calloc(full, sizeof(double));
-    arg[i].out2 = calloc(full, sizeof(double));
+    arg[i].out1 = calloc(full, sizeof(long double));
+    arg[i].out2 = calloc(full, sizeof(long double));
     arg[i].n = calloc(full, sizeof(int32_t));
     arg[i].nom = calloc(full, sizeof(long double));
     arg[i].dn1 = calloc(full, sizeof(long double));
@@ -278,13 +278,17 @@ double get_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
     if (n[i] == 0){
       continue;
     }
-    spec1[i] = (spec1[i] / (double) n[i]);
-    spec2[i] = (spec2[i] / (double) n[i]);
-    if ((cut == 0.0) && (fabsl(nom[i]) / sqrtl(fabsl(dn1[i]) * fabsl(dn2[i])) < 0.143)){
+    fsc = fabsl((fabsl(nom[i]) / sqrtl(fabsl(dn1[i]) * fabsl(dn2[i]))));
+    crf = sqrt((2.0 * fsc) / (1.0 + fsc));
+    spec1[i] = crf * (spec1[i] / (double) n[i]);
+    spec2[i] = crf * (spec2[i] / (double) n[i]);
+    if ((cut == 0.0) && (fsc < 0.1)){
       cut = ((double) i) / (full * 2.0);
     }
   }
   free(n);
+  spec1[0] = creal(half1[0]);
+  spec2[0] = creal(half2[0]);
   if (cut == 0.0){
     cut = 0.475;
   }
@@ -300,13 +304,13 @@ void get_spec_thread(spec_arg *arg){
       jd = (double) j;
       for(int _i = arg->thread, i = arg->thread; _i < arg->size; _i += arg->step, i = _i){
         id = (double) i;
-        norms = (int32_t) (sqrt(fabs(kd * kd + jd * jd + id * id)) * 2.0);
+        norms = (int32_t) round(sqrt(fabs(kd * kd + jd * jd + id * id)) * 2.0);
 	if (norms >= arg->full){
 	  continue;
 	}
         index = _k * arg->full_size + _j * arg->size + _i;
-        arg->out1[norms] += sqrt(fabs(creal(arg->in1[index] * conj(arg->in1[index]))));
-	arg->out2[norms] += sqrt(fabs(creal(arg->in2[index] * conj(arg->in2[index]))));
+        arg->out1[norms] += sqrtl(fabsl(creal(arg->in1[index] * conj(arg->in1[index]))));
+	arg->out2[norms] += sqrtl(fabsl(creal(arg->in2[index] * conj(arg->in2[index]))));
 	if (arg->nom && arg->dn1 && arg->dn2){
 	  arg->nom[norms] += creal((arg->in1[index]) * conj(arg->in2[index]));
 	  arg->dn1[norms] += creal((arg->in1[index]) * conj(arg->in1[index]));
@@ -320,21 +324,21 @@ void get_spec_thread(spec_arg *arg){
 }
 
 // Apply spectrum over map
-void apply_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, double *spec2, double maxres, int32_t full, int32_t nthreads){
+void apply_spectrum(fftw_complex *half1, fftw_complex *half2, long double *spec1, long double *spec2, double maxres, int32_t full, int32_t nthreads){
   double dim = (double) full;
   int32_t size = (full / 2) + 1, i, j;
   int32_t full_size = full * size;
   int32_t *n = calloc(full, sizeof(int32_t));
-  double *cor1 = calloc(full, sizeof(double));
-  double *cor2 = calloc(full, sizeof(double));
+  long double *cor1 = calloc(full, sizeof(long double));
+  long double *cor2 = calloc(full, sizeof(long double));
   pthread_t threads[nthreads];
   spec_arg arg[nthreads];
   // Start threads
   for (i = 0; i < nthreads; i++){
     arg[i].in1 = half1;
     arg[i].in2 = half2;
-    arg[i].out1 = calloc(full, sizeof(double));
-    arg[i].out2 = calloc(full, sizeof(double));
+    arg[i].out1 = calloc(full, sizeof(long double));
+    arg[i].out2 = calloc(full, sizeof(long double));
     arg[i].n = calloc(full, sizeof(int32_t));
     arg[i].nom = NULL;
     arg[i].dn1 = NULL;
@@ -371,8 +375,8 @@ void apply_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
   int32_t cut = (int32_t) (maxres * full * 2.0);
   for (i = 0; i < full; i++){
     if (i < cut){
-      cor1[i] = spec1[i] / (cor1[i] / (double) n[i]);
-      cor2[i] = spec2[i] / (cor2[i] / (double) n[i]);
+      cor1[i] = spec1[i] / (cor1[i] / (long double) n[i]);
+      cor2[i] = spec2[i] / (cor2[i] / (long double) n[i]);
     } else {
       cor1[i] = 0.0;
       cor2[i] = 0.0;
@@ -396,6 +400,8 @@ void apply_spectrum(fftw_complex *half1, fftw_complex *half2, double *spec1, dou
       exit(1);
     }
   }
+  half1[0] = spec1[0] + 0.0J;
+  half2[0] = spec2[0] + 0.0J;
   free(cor1);
   free(cor2);
   free(n);
@@ -411,7 +417,7 @@ void apply_spec_thread(spec_arg *arg){
       jd = (double) j;
       for(int _i = arg->thread, i = arg->thread; _i < arg->size; _i += arg->step, i = _i){
         id = (double) i;
-        norms = (int32_t) (sqrt(fabs(kd * kd + jd * jd + id * id)) * 2.0);
+        norms = (int32_t) round(sqrt(fabs(kd * kd + jd * jd + id * id)) * 2.0);
         index = _k * arg->full_size + _j * arg->size + _i;
 	if (norms >= arg->full){
 	  arg->in1[index] *= 0.0;

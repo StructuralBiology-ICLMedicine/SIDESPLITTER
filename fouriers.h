@@ -70,8 +70,8 @@ typedef struct{
 typedef struct{
   fftw_complex *in1;
   fftw_complex *in2;
-  double      *out1;
-  double      *out2;
+  long double *out1;
+  long double *out2;
   long double  *nom;
   long double  *dn1;
   long double  *dn2;

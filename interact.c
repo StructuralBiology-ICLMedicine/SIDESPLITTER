@@ -143,10 +143,11 @@ arguments *parse_args(int argc, char **argv){
   printf("\n%s\n\n", splash);
 
   if (argc < 7){
-    printf("\n    Usage: %s --v1 half_map1.mrc --v2 half_map2.mrc --mask mask.mrc \n\n", argv[0]);
+    printf("\n    Usage: %s --v1 half_map1.mrc --v2 half_map2.mrc --mask mask.mrc [ --spectrum ]\n\n", argv[0]);
   }
 
   printf("    PLEASE NOTE: SIDESPLITTER requires the unfiltered halfmaps and mask from each iteration or your results will be invalid\n");
+  printf("                 Setting flag --spectrum outputs the SNR weighted spectrum rather than matching input spectrum / grey-scale\n");
   printf("                 Junk in = Junk out is one thing we will guarantee. Report any bugs to c.aylett@imperial.ac.uk - good luck!\n\n");
   printf("    SIDESPLITTER V1.0: LAFTER algorithm for halfmaps - 01-01-2020 GNU Public Licensed - K Ramlaul, CM Palmer and CHS Aylett\n\n");
 
@@ -161,6 +162,8 @@ arguments *parse_args(int argc, char **argv){
       args->vol2 = argv[i + 1];
     } else if (!strcmp(argv[i], "--mask") && ((i + 1) < argc)){
       args->mask = argv[i + 1];
+    } else if (!strcmp(argv[i], "--spectrum")){
+      args->spec = 1;
     }
   }
   if (args->vol1 == NULL || args->vol2 == NULL){
@@ -174,7 +177,7 @@ arguments *parse_args(int argc, char **argv){
 list *extend_list(list *current, double p){
   list *node = calloc(1, sizeof(list));
   node->res = current->res + current->stp;
-  node->stp = p * (node->res / 16.0);
+  node->stp = p * (node->res / 32.0);
   node->prv = current;
   node->nxt = NULL;
   current->nxt = node;

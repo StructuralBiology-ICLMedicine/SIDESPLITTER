@@ -1,4 +1,5 @@
 
+
 /*                                                                         
  * Copyright 14/08/2019 - Dr. Christopher H. S. Aylett                     
  *                                                                         
@@ -22,8 +23,8 @@
 #include "sidesplitter.h"
 #include "suppress.h"
 
-// Suppress noise between in/out
-double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mrc *mask, list *node, int32_t size, int32_t nthreads){
+// Normalise between in/out
+double normalise(double *in1, double *in2, double *out1, double *out2, r_mrc *mask, list *node, int32_t size, int32_t nthreads){
   int32_t i, max = size * size * size;
   pthread_t threads[nthreads];
   // Calculate mean noise and mean signal
@@ -62,7 +63,7 @@ double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mr
   noise /= count;
   power /= count;
   double psnr = fabsl(1.0 - noise / power);
-  double rmsd = sqrtl(power);
+  node->pwr = sqrtl(power);
   // Correct according to probability and power
   prob_arg arg2[nthreads];
   // Start threads
@@ -73,8 +74,7 @@ double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mr
     arg2[i].out1 = out1;
     arg2[i].out2 = out2;
     arg2[i].rstp = node->stp;
-    arg2[i].rmsd = rmsd;
-    arg2[i].flag = 1.0;
+    arg2[i].rmsd = node->pwr;
     arg2[i].size = max;
     arg2[i].step = nthreads;
     arg2[i].thread = i;
@@ -85,7 +85,6 @@ double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mr
     }
   }
   node->max = psnr;
-  double flag = 1.0;
   // Join threads
   for (i = 0; i < nthreads; i++){
     if (pthread_join(threads[i], NULL)){
@@ -93,13 +92,8 @@ double suppress_noise(double *in1, double *in2, double *out1, double *out2, r_mr
       fflush(stdout);
       exit(1);
     }
-    flag *= arg2[i].flag;
   }
-  if (flag > 0.0){
-    return -psnr;
-  } else {
-    return psnr;
-  }
+  return psnr;
 }
 
 void calc_noise_signal_thread(cns_arg *arg){
@@ -126,11 +120,52 @@ void probability_correct_thread(prob_arg *arg){
   int32_t i;
   double res_stp_sd = arg->rstp / arg->rmsd;
   for (i = arg->thread; i < arg->size; i += arg->step){
-    if (arg->in1[i] / arg->rmsd > 5 || arg->in2[i] / arg->rmsd > 5){
-      arg->flag = 0.0;
-    }
     arg->out1[i] += arg->in1[i] * res_stp_sd;
     arg->out2[i] += arg->in2[i] * res_stp_sd;
+  }
+  return;
+}
+
+// Undo normalisation between in/out
+void reverse_norm(double *in1, double *in2, double *out1, double *out2, r_mrc *mask, list *node, int32_t size, int32_t nthreads){
+  int32_t i, max = size * size * size;
+  pthread_t threads[nthreads];
+  prob_arg arg[nthreads];
+  // Start threads
+  for (i = 0; i < nthreads; i++){
+    arg[i].in1 = in1;
+    arg[i].in2 = in2;
+    arg[i].out1 = out1;
+    arg[i].out2 = out2;
+    arg[i].rstp = node->stp;
+    arg[i].rmsd = node->pwr;
+    arg[i].size = max;
+    arg[i].step = nthreads;
+    arg[i].thread = i;
+    if (pthread_create(&threads[i], NULL, (void*) revert_thread, &arg[i])){
+      printf("\nThread initialisation failed!\n");
+      fflush(stdout);
+      exit(1);
+    }
+  }
+  // Join threads
+  for (i = 0; i < nthreads; i++){
+    if (pthread_join(threads[i], NULL)){
+      printf("\nThread failed during run!\n");
+      fflush(stdout);
+      exit(1);
+    }
+  }
+  return;
+}
+
+void revert_thread(prob_arg *arg){
+  int32_t i;
+  double res_stp_sd = arg->rstp / arg->rmsd;
+  for (i = arg->thread; i < arg->size; i += arg->step){
+    // Correct output
+    arg->out1[i] += arg->in1[i] / res_stp_sd;
+    arg->out2[i] += arg->in2[i] / res_stp_sd;
   }
   return;
 }
