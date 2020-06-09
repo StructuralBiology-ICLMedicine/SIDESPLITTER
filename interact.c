@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V1.0                                               
+ * Program: SIDESPLITTER V1.2                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -143,13 +143,14 @@ arguments *parse_args(int argc, char **argv){
   printf("\n%s\n\n", splash);
 
   if (argc < 7){
-    printf("\n    Usage: %s --v1 half_map1.mrc --v2 half_map2.mrc --mask mask.mrc [ --spectrum ]\n\n", argv[0]);
+    printf("\n    Usage: %s --v1 half_map1.mrc --v2 half_map2.mrc --mask mask.mrc [ --spectrum || --rotfl ]\n\n", argv[0]);
   }
 
   printf("    PLEASE NOTE: SIDESPLITTER requires the unfiltered halfmaps and mask from each iteration or your results will be invalid\n");
-  printf("                 Setting flag --spectrum outputs the SNR weighted spectrum rather than matching input spectrum / grey-scale\n");
-  printf("                 Junk in = Junk out is one thing we will guarantee. Report any bugs to c.aylett@imperial.ac.uk - good luck!\n\n");
-  printf("    SIDESPLITTER V1.0: LAFTER algorithm for halfmaps - 01-01-2020 GNU Public Licensed - K Ramlaul, CM Palmer and CHS Aylett\n\n");
+  printf("                 Setting flag --spectrum outputs the natural SNR weighted spectrum rather than matching your input spectrum\n");
+  printf("                 Setting flag --rotfl performs SNR tapering, matching input density in real-space rather than Fourier-space\n");
+  printf("                 Remember - Junk in = Junk out! Please report any bug or observation to c.aylett@imperial.ac.uk, good luck!\n\n");
+  printf("    SIDESPLITTER V1.2: LAFTER algorithm for halfmaps - 06-06-2020 GNU Public Licensed - K Ramlaul, CM Palmer and CHS Aylett\n\n");
 
   // Capture user requested settings
   int i;
@@ -164,6 +165,8 @@ arguments *parse_args(int argc, char **argv){
       args->mask = argv[i + 1];
     } else if (!strcmp(argv[i], "--spectrum")){
       args->spec = 1;
+    } else if (!strcmp(argv[i], "--rotfl")){
+      args->rotf = 1;
     }
   }
   if (args->vol1 == NULL || args->vol2 == NULL){
@@ -177,7 +180,7 @@ arguments *parse_args(int argc, char **argv){
 list *extend_list(list *current, double p){
   list *node = calloc(1, sizeof(list));
   node->res = current->res + current->stp;
-  node->stp = p * (node->res / 32.0);
+  node->stp = p * (node->res / 64.0);
   node->prv = current;
   node->nxt = NULL;
   current->nxt = node;
@@ -270,9 +273,10 @@ void write_mrc(r_mrc* header, double *vol, char* filename, int32_t size){
     printf("Error reading %s - map not allocated\n", filename);
     exit(1);
   }
+
   for (i = 0; i < total; i++){
-    // Divide by total to normalise data values (assuming this is always called after an IFFT)
-    header->data[i] = (float) (vol[i] / total);
+    // Convert double map to float for writing out
+    header->data[i] = (float) vol[i];
   }
 
   // Calculate new min, max and mean figures for header

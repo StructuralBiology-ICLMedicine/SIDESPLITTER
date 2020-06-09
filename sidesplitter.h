@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V1.0                                               
+ * Program: SIDESPLITTER V1.2                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -43,6 +43,7 @@ typedef struct {
   char   *vol2;
   char   *mask;
   int8_t  spec;
+  int8_t  rotf;
 } arguments;
 
 // List node
@@ -143,5 +144,9 @@ void reverse_norm(double *in1, double *in2, double *out1, double *out2, r_mrc *m
 // Revert normalised data
 
 double truncate_map(double *in1, double *in2, double *out1, double *out2, r_mrc *mask, list *node, arguments *args, int32_t size, int32_t nthread);
+// Updates out if in1/2 over noise
+// Returns fractional recovery
+
+double taper_map(double *in1, double *in2, double *out1, double *out2, double *ori1, double *ori2, r_mrc *mask, list *node, arguments *args, int32_t size, int32_t nthread);
 // Updates out if in1/2 over noise
 // Returns fractional recovery

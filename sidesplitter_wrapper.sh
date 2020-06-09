@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Wrapper to run relion_external_reconstruct and sidesplitter
-# Version 1.0
+# Version 1.2
 # Author: Colin M. Palmer
 
 # Usage:
@@ -90,6 +90,26 @@ fi
 $debug && echo "$$ Moving output file ${base_path}.mrc to ${base_path}_orig.mrc"
 mv "${base_path}.mrc" "${base_path}_orig.mrc"
 
+#### START OF FSC MODIFICATION SEGMENT ####
+
+# Inflate FSC by FSC_SS = (sqrt(2 (FSC + FSC^2)) + FSC) / (2 + FSC)
+# Comment this out if FSC modification is not desirable - e.g. for particularly poorly stable refinements
+
+outstar=`awk '/_rlnExtReconsResultStarfile/ {print $2}' $1`
+echo "Writing adjusted FSC curve to $outstar"
+
+echo "data_
+
+loop_
+_rlnSpectralIndex #1
+_rlnGoldStandardFsc #2
+_rlnFourierShellCorrelation #3
+" > $outstar
+
+relion_star_printtable $1 data_external_reconstruct_tau2 rlnSpectralIndex rlnGoldStandardFsc | awk '{$3 = (sqrt(2 * ($2 + $2 * $2)) + $2) / (2 + $2); print $0}' >> $outstar
+
+####  END OF FSC MODIFICATION SEGMENT  ####
+
 if $first; then
   $debug && echo "$$ $(date) First reconstruct job finished; waiting for $running_ind_dir to disappear"
   while [[ -d $running_ind_dir ]]; do
@@ -104,10 +124,10 @@ if $first; then
   if [[ -z "$mask" ]]; then
     echo "Warning: no mask found! SIDESPLITTER will give better results if you use a mask."
     echo "$$ $(date) Running $sidesplitter  --v1 ${base_path/half2/half1}_orig.mrc --v2 ${base_path/half1/half2}_orig.mrc > ${base_path%_half*}_sidesplitter.out"
-    $sidesplitter  --v1 "${base_path/half2/half1}_orig.mrc" --v2 "${base_path/half1/half2}_orig.mrc" > "${base_path%_half*}_sidesplitter.out"
+    $sidesplitter  --v1 "${base_path/half2/half1}_orig.mrc" --v2 "${base_path/half1/half2}_orig.mrc" --rotfl > "${base_path%_half*}_sidesplitter.out"
   else
     echo "$$ $(date) Running $sidesplitter  --v1 ${base_path/half2/half1}_orig.mrc --v2 ${base_path/half1/half2}_orig.mrc --mask $mask > ${base_path%_half*}_sidesplitter.out"
-    $sidesplitter  --v1 "${base_path/half2/half1}_orig.mrc" --v2 "${base_path/half1/half2}_orig.mrc" --mask "$mask" > "${base_path%_half*}_sidesplitter.out"
+    $sidesplitter  --v1 "${base_path/half2/half1}_orig.mrc" --v2 "${base_path/half1/half2}_orig.mrc" --mask "$mask" --rotfl > "${base_path%_half*}_sidesplitter.out"
   fi
 
   $debug && echo "$$ Moving sidesplitter output halfmap1.mrc to ${base_path/half2/half1}.mrc"
@@ -130,4 +150,3 @@ else
   $debug && echo "$$ $(date) $running_ind_dir has reappeared. Removing it and exiting"
   rmdir "$running_ind_dir"
 fi
-

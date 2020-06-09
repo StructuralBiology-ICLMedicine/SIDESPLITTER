@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V1.0                                               
+ * Program: SIDESPLITTER V1.2                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -50,6 +50,8 @@ typedef struct{
   double    *in2;
   double   *out1;
   double   *out2;
+  double   *ori1;
+  double   *ori2;
   double   noise;
   double     rcv;
   int32_t   size;
@@ -62,5 +64,9 @@ void calc_max_noise_thread(max_arg *arg);
 // pthread function
 
 void assign_voxels_thread(ass_vox_arg *arg);
+// Correct according to probability
+// pthread function
+
+void taper_voxels_thread(ass_vox_arg *arg);
 // Correct according to probability
 // pthread function

@@ -12,7 +12,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V1.0                                               
+ * Program: SIDESPLITTER V1.2                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   

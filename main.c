@@ -11,7 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           
  * GNU General Public License for more details - YOU HAVE BEEN WARNED!     
  *                                                                         
- * Program: SIDESPLITTER V1.0                                               
+ * Program: SIDESPLITTER V1.2                                               
  *                                                                         
  * Authors: Chris Aylett                                                   
  *          Colin Palmer                                                   
@@ -125,6 +125,19 @@ int main(int argc, char **argv){
   fftw_execute(fft_ro1_ki1);
   fftw_execute(fft_ro2_ki2);
 
+  // Copy across ffts if tapering
+  fftw_complex *inpk1 = NULL;
+  fftw_complex *inpk2 = NULL;
+
+  if (args->rotf){
+
+    inpk1 = fftw_malloc(k_st);
+    inpk2 = fftw_malloc(k_st);
+
+    memcpy(inpk1, ki1, k_st);
+    memcpy(inpk2, ki2, k_st);
+  }
+  
   // Zero fill maps
   memset(ro1, 0, r_st);
   memset(ro2, 0, r_st);
@@ -192,26 +205,94 @@ int main(int argc, char **argv){
   printf("\n\t # Recovery indicates the fraction of the mask recovered by the current resolution");
   printf("\n\t # This should reach at least 1.0 but will preferably end up considerably higher -\n\n");
   fflush(stdout);
-  do {
 
-    lowpass_filter(ki1, ko1, tail, xyz, nthread);
-    lowpass_filter(ki2, ko2, tail, xyz, nthread);
+  char *name1 = "halfmap1.mrc";
+  char *name2 = "halfmap2.mrc";
 
-    fftw_execute(fft_ko1_ri1);
-    fftw_execute(fft_ko2_ri2);
+  // Choose tapering loop if required
+  if (args->rotf){
 
-    mean_p = truncate_map(ri1, ri2, ro1, ro2, mask, tail, args, xyz, nthread);
+    double *ori1 = fftw_malloc(r_st);
+    double *ori2 = fftw_malloc(r_st);
 
-    printf("\t Resolution = %12.6Lf | Recovery = %12.6f\n", apix / (tail->res + tail->stp), mean_p);
-    fflush(stdout);
+    memset(ori1, 0, r_st);
+    memset(ori2, 0, r_st);
 
-    if (tail->prv == NULL){
-      break;
-    } else{
-      tail = tail->prv;
+    fftw_complex *oki1 = fftw_malloc(k_st);
+    fftw_complex *oki2 = fftw_malloc(k_st);
+
+    memset(oki1, 0, k_st);
+    memset(oki2, 0, k_st);
+
+    fftw_plan fft_oki1_ori1 = fftw_plan_dft_c2r_3d(xyz, xyz, xyz, oki1, ori1, FFTW_ESTIMATE);
+    fftw_plan fft_oki2_ori2 = fftw_plan_dft_c2r_3d(xyz, xyz, xyz, oki2, ori2, FFTW_ESTIMATE);
+  
+    do {
+
+      lowpass_filter(ki1, ko1, tail, xyz, nthread);
+      lowpass_filter(ki2, ko2, tail, xyz, nthread);
+
+      lowpass_filter(inpk1, oki1, tail, xyz, nthread);
+      lowpass_filter(inpk2, oki2, tail, xyz, nthread);
+
+      fftw_execute(fft_ko1_ri1);
+      fftw_execute(fft_ko2_ri2);
+
+      fftw_execute(fft_oki1_ori1);
+      fftw_execute(fft_oki2_ori2);
+
+      mean_p = taper_map(ri1, ri2, ro1, ro2, ori1, ori2, mask, tail, args, xyz, nthread);
+
+      printf("\t Resolution = %12.6Lf | Recovery = %12.6f\n", apix / (tail->res + tail->stp), mean_p);
+      fflush(stdout);
+    
+      if (tail->prv == NULL){
+	break;
+      } else{
+	tail = tail->prv;
+      }
+
+    } while (1);
+
+    // Renormalise maps
+    int32_t total = xyz * xyz * xyz;
+
+    for (i = 0; i < total; i++){
+      ro1[i] /= (double) total;
+      ro2[i] /= (double) total;
     }
 
-  } while (1);
+    // Output maps if SNR tapering
+    write_mrc(vol1, ro1, name1, xyz);
+    write_mrc(vol2, ro2, name2, xyz);
+
+    // Over and out...
+    printf("\n\n\n\t ++++ ++++ That's All Folks! ++++ ++++ \n\n\n");
+
+    return 0;
+    
+  } else {
+    do {
+
+      lowpass_filter(ki1, ko1, tail, xyz, nthread);
+      lowpass_filter(ki2, ko2, tail, xyz, nthread);
+
+      fftw_execute(fft_ko1_ri1);
+      fftw_execute(fft_ko2_ri2);
+
+      mean_p = truncate_map(ri1, ri2, ro1, ro2, mask, tail, args, xyz, nthread);
+
+      printf("\t Resolution = %12.6Lf | Recovery = %12.6f\n", apix / (tail->res + tail->stp), mean_p);
+      fflush(stdout);
+    
+      if (tail->prv == NULL){
+	break;
+      } else{
+	tail = tail->prv;
+      }
+
+    } while (1);
+  }
 
   // Back-transform noise-suppressed maps
   fftw_execute(fft_ro1_ki1);
@@ -260,9 +341,6 @@ int main(int argc, char **argv){
   printf("\n\t Writing noise truncated MRC files\n");
   fflush(stdout);
   
-  char *name1 = "halfmap1.mrc";
-  char *name2 = "halfmap2.mrc";
-
   if (!args->spec){
 
     fftw_execute(fft_ro1_ki1);
@@ -276,10 +354,26 @@ int main(int argc, char **argv){
     fftw_execute(fft_ki1_ri1);
     fftw_execute(fft_ki2_ri2);
     
+    // Renormalise maps
+    int32_t total = xyz * xyz * xyz;
+
+    for (i = 0; i < total; i++){
+      ri1[i] /= (double) total;
+      ri2[i] /= (double) total;
+    }
+
     write_mrc(vol1, ri1, name1, xyz);
     write_mrc(vol2, ri2, name2, xyz);
 
   } else {
+
+    // Renormalise maps
+    int32_t total = xyz * xyz * xyz;
+
+    for (i = 0; i < total; i++){
+      ro1[i] /= (double) total;
+      ro2[i] /= (double) total;
+    }
 
     write_mrc(vol1, ro1, name1, xyz);
     write_mrc(vol2, ro2, name2, xyz);
