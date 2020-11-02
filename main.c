@@ -208,6 +208,14 @@ int main(int argc, char **argv){
 
   char *name1 = "halfmap1.mrc";
   char *name2 = "halfmap2.mrc";
+  
+  if (args->out){
+    size_t name_buffer = snprintf(NULL, 0, "%s%s", args->out, "_halfmap1.mrc") + 1;
+    name1 = malloc(name_buffer);
+    sprintf(name1, "%s%s", args->out, "_halfmap1.mrc");
+    name2 = malloc(name_buffer);
+    sprintf(name2, "%s%s", args->out, "_halfmap2.mrc");
+  }
 
   // Choose tapering loop if required
   if (args->rotf){

@@ -42,6 +42,7 @@ typedef struct {
   char   *vol1;
   char   *vol2;
   char   *mask;
+  char    *out;
   int8_t  spec;
   int8_t  rotf;
 } arguments;
