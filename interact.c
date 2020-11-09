@@ -143,7 +143,7 @@ arguments *parse_args(int argc, char **argv){
   printf("\n%s\n\n", splash);
 
   if (argc < 7){
-    printf("\n    Usage: %s --v1 half_map1.mrc --v2 half_map2.mrc --o output_root --mask mask.mrc [ --spectrum || --rotfl ]\n\n", argv[0]);
+    printf("\n    Usage: %s --v1 half_map1.mrc --v2 half_map2.mrc --mask mask.mrc [ --spectrum || --rotfl ]\n\n", argv[0]);
   }
 
   printf("    PLEASE NOTE: SIDESPLITTER requires the unfiltered halfmaps and mask from each iteration or your results will be invalid\n");
@@ -161,8 +161,6 @@ arguments *parse_args(int argc, char **argv){
       args->vol1 = argv[i + 1];
     } else if (!strcmp(argv[i], "--v2") && ((i + 1) < argc)){
       args->vol2 = argv[i + 1];
-    } else if (!strcmp(argv[i], "--o") && ((i + 1) < argc)){
-      args->out = argv[i + 1];
     } else if (!strcmp(argv[i], "--mask") && ((i + 1) < argc)){
       args->mask = argv[i + 1];
     } else if (!strcmp(argv[i], "--spectrum")){
@@ -342,4 +340,15 @@ void write_mrc(r_mrc* header, double *vol, char* filename, int32_t size){
   free(header->data);
   header->data = hold;
   return;
+}
+
+void strip_ext(char *fname){
+  // Strip file extention
+  char *end = fname + strlen(fname);
+  while (end > fname && *end != '.') {
+    --end;
+  }
+  if (end > fname) {
+    *end = '\0';
+  }
 }

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Wrapper to run relion_external_reconstruct and sidesplitter
-# Version 1.2
-# Author: Colin M. Palmer
+# Version 1.3
+# Author: Colin M. Palmer & Takanori Nakane
 
 # Usage:
 #     sidesplitter_wrapper.sh path/to/relion_external_reconstruct_star_file.star
@@ -38,7 +38,7 @@
 # volumes are ready).
 #
 # If the target file name does not contain "_half", this script assumes there is only a single copy of itself running.
-# In this case it call relion_external_reconstruct, waits for the reconstruction to finish and then exits.
+# In this case it calls relion_external_reconstruct, waits for the reconstruction to finish and then exits.
 # This handles the final iteration when the two half sets are combined, at which point RELION calls the external
 # reconstruction program just once to reconstruct the final combined volume.
 #
@@ -55,34 +55,65 @@ sidesplitter=${SIDESPLITTER:-${sidesplitter_default}}
 # Change to true to activate debug output (to check for problems with process coordination)
 debug=false
 
-
 #### Main script
 
+# Convenience function to print and run a command
+echo_and_run() {
+  echo "$$ $(date) Running $@"
+  eval "$@"
+}
+
 # Expect this to be called with one argument, pointing at a STAR file for relion_external_reconstruct
-base_path=${1%.star}
+base_name=$(basename -- "$1" ".star")
+job_dir=$(dirname -- "$1")
+base_path="${job_dir}/${base_name}"
+base_dir=`dirname $base_path`
+body_id=$(echo ${base_name} | sed -n 's,^.*_body\([0-9]*\)_external_reconstruct.*$,\1,p')
 
-running_ind_dir=${base_path%/*}/sidesplitter_running
-
-$debug && echo "$$ Checking for existence of $running_ind_dir ..."
-
-if mkdir "$running_ind_dir" 2> /dev/null; then
-  first=true
-  $debug && echo "$$ Created $running_ind_dir"
+# Find the mask
+# TODO: Do this only once!
+mask=""
+if [ -z "$body_id" ]; then # multibody
+  mask=$(awk '/fn_mask/ { gsub(/^"|"$/, "", $2); print $2 }' ${base_dir}/job.star)
 else
-  first=false
-  $debug && echo "$$ $running_ind_dir already exists"
+  fnbody=$(awk '/fn_bodies/ { gsub(/^"|"$/, "", $2); print $2 }' ${base_dir}/job.star)
+  origmask=$(relion_star_printtable $fnbody data_ rlnBodyMaskName | sed "${body_id}q;d")
+  mask=${base_dir}/centered_mask_body${body_id}.mrc
+  relion_image_handler --i $origmask --o $mask `relion_image_handler --i $origmask --com | awk '{print "--shift_x "(-$10)" --shift_y "(-$12)" --shift_z "(-$14)}'`
 fi
 
-echo "$$ $(date) Running relion_external_reconstruct $1 > $base_path.out 2> $base_path.err"
-relion_external_reconstruct "$1" > "$base_path.out" 2> "$base_path.err"
+# Because only one of the two performs the actual work, use twice the number of threads.
+nthreads=$(awk '/nr_threads/ { gsub(/^"|"$/, "", $2); print 2*$2 }' ${base_path%/*}/job.star)
 
-if [[ $base_path != *"_half"* ]]; then
+$debug && echo NTHREADS=$nthreads
+$debug && echo BODY_ID=$body_id
+$debug && echo MASK=$mask
+
+# Create a name to use for Sidesplitter output by removing "_half1" or "_half2" and "_external_reconstruct" from base_name
+name_without_half="${base_name/_half[12]/}"
+sidesplitter_base="${job_dir}/${name_without_half/_external_reconstruct/}_sidesplitter"
+
+running_indicator_dir="${sidesplitter_base}_running"
+
+$debug && echo "$$ Checking for existence of $running_indicator_dir ..."
+
+if mkdir "$running_indicator_dir" 2> /dev/null; then
+  first=true
+  $debug && echo "$$ Created $running_indicator_dir"
+else
+  first=false
+  $debug && echo "$$ $running_indicator_dir already exists"
+fi
+
+echo_and_run "relion_external_reconstruct \"$1\" > \"${base_path}.out\" 2> \"${base_path}.err\""
+
+if [[ $base_name != *"_half"* ]]; then
   if $first; then
-    $debug && echo "$$ $(date) Only a single reconstruction, removing $running_ind_dir and exiting."
-    rmdir "$running_ind_dir"
+    $debug && echo "$$ $(date) Only a single reconstruction, removing $running_indicator_dir and exiting."
+    rmdir "$running_indicator_dir"
     exit 0
   else
-    $debug && echo "$$ $(date) Error! Found pre-existing $running_ind_dir for single reconstruction job."
+    $debug && echo "$$ $(date) Error! Found pre-existing $running_indicator_dir for single reconstruction job."
     exit 1
   fi
 fi
@@ -111,42 +142,47 @@ relion_star_printtable $1 data_external_reconstruct_tau2 rlnSpectralIndex rlnGol
 ####  END OF FSC MODIFICATION SEGMENT  ####
 
 if $first; then
-  $debug && echo "$$ $(date) First reconstruct job finished; waiting for $running_ind_dir to disappear"
-  while [[ -d $running_ind_dir ]]; do
-    $debug && echo "$$ $(date) $running_ind_dir still exists; waiting..."
+  $debug && echo "$$ $(date) First reconstruct job finished; waiting for $running_indicator_dir to disappear"
+  while [[ -d $running_indicator_dir ]]; do
+    $debug && echo "$$ $(date) $running_indicator_dir still exists; waiting..."
     sleep 5
   done
 
-  $debug && echo "$$ $(date) $running_ind_dir has disappeared. Moving on to sidesplitter step."
+  $debug && echo "$$ $(date) $running_indicator_dir has disappeared. Moving on to SIDESPLITTER step."
 
-  mask=$(awk '/fn_mask/ { gsub(/^"|"$/, "", $2) ; print $2 }' ${base_path%/*}/job.star)
-
+  # Prepare the SIDESPLITTER command
+  half1_basename=${base_path/half2/half1}
+  half2_basename=${base_path/half1/half2}
+  sidesplitter_command="OMP_NUM_THREADS=$nthreads $sidesplitter --v1 \"${half1_basename}_orig.mrc\" --v2 \"${half2_basename}_orig.mrc\" --rotfl"
   if [[ -z "$mask" ]]; then
     echo "Warning: no mask found! SIDESPLITTER will give better results if you use a mask."
-    echo "$$ $(date) Running $sidesplitter  --v1 ${base_path/half2/half1}_orig.mrc --v2 ${base_path/half1/half2}_orig.mrc > ${base_path%_half*}_sidesplitter.out"
-    $sidesplitter  --v1 "${base_path/half2/half1}_orig.mrc" --v2 "${base_path/half1/half2}_orig.mrc" --rotfl > "${base_path%_half*}_sidesplitter.out"
   else
-    echo "$$ $(date) Running $sidesplitter  --v1 ${base_path/half2/half1}_orig.mrc --v2 ${base_path/half1/half2}_orig.mrc --mask $mask > ${base_path%_half*}_sidesplitter.out"
-    $sidesplitter  --v1 "${base_path/half2/half1}_orig.mrc" --v2 "${base_path/half1/half2}_orig.mrc" --mask "$mask" --rotfl > "${base_path%_half*}_sidesplitter.out"
+    sidesplitter_command="${sidesplitter_command} --mask \"${mask}\""
   fi
+  sidesplitter_command="${sidesplitter_command} > \"${sidesplitter_base}.out\""
 
-  $debug && echo "$$ Moving sidesplitter output halfmap1.mrc to ${base_path/half2/half1}.mrc"
-  mv halfmap1.mrc "${base_path/half2/half1}.mrc"
+  # Run SIDESPLITTER
+  echo_and_run "$sidesplitter_command"
 
-  $debug && echo "$$ Moving sidesplitter output halfmap2.mrc to ${base_path/half1/half2}.mrc"
-  mv halfmap2.mrc "${base_path/half1/half2}.mrc"
+  # Move output files to where RELION expects them
+  $debug && echo "$$ Moving sidesplitter output ${half1_basename}_orig_sidesplitter.mrc to ${half1_basename}.mrc"
+  mv ${half1_basename}_orig_sidesplitter.mrc ${half1_basename}.mrc
 
-  $debug && echo "$$ $(date) Finished sidesplitter. Recreating $running_ind_dir to signal job finished."
-  mkdir "$running_ind_dir"
+  $debug && echo "$$ Moving sidesplitter output ${half2_basename}_orig_sidesplitter.mrc to ${half2_basename}.mrc"
+  mv ${half2_basename}_orig_sidesplitter.mrc ${half2_basename}.mrc
+
+  $debug && echo "$$ $(date) Finished sidesplitter. Recreating $running_indicator_dir to indicate job finished."
+  mkdir "$running_indicator_dir"
 
 else
-  $debug && echo "$$ $(date) Second reconstruct job finished; removing $running_ind_dir"
-  rmdir "$running_ind_dir"
-  $debug && echo "$$ $(date) Waiting for $running_ind_dir to reappear"
-  while [[ ! -d $running_ind_dir ]]; do
-    $debug && echo "$$ $(date) $running_ind_dir does not exist; waiting..."
+  $debug && echo "$$ $(date) Second reconstruct job finished; removing $running_indicator_dir"
+  rmdir "$running_indicator_dir"
+  $debug && echo "$$ $(date) Waiting for $running_indicator_dir to reappear"
+  while [[ ! -d $running_indicator_dir ]]; do
+    $debug && echo "$$ $(date) $running_indicator_dir does not exist; waiting..."
     sleep 60
   done
-  $debug && echo "$$ $(date) $running_ind_dir has reappeared. Removing it and exiting"
-  rmdir "$running_ind_dir"
+  $debug && echo "$$ $(date) $running_indicator_dir has reappeared. Removing it and exiting"
+  rmdir "$running_indicator_dir"
 fi
+

@@ -42,7 +42,6 @@ typedef struct {
   char   *vol1;
   char   *vol2;
   char   *mask;
-  char    *out;
   int8_t  spec;
   int8_t  rotf;
 } arguments;
@@ -106,6 +105,9 @@ r_mrc *read_mrc(char* filename);
 
 void write_mrc(r_mrc *mrc, double *map, char* filename, int32_t size);
 // Read mrc file and build struct
+
+void strip_ext(char *fname);
+// Strip extention from filename
 
 r_mrc *make_msk(r_mrc *mrc, double rad, int32_t nthread);
 // Make mask from radius in voxels
